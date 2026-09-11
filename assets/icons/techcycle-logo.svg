@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title description">
+  <title id="title">Símbolo TechCycle</title>
+  <desc id="description">Folhas conectadas a circuitos, dentro de um círculo.</desc>
+  <defs><linearGradient id="g" x1="22" y1="29" x2="229" y2="222" gradientUnits="userSpaceOnUse"><stop stop-color="#69d700"/><stop offset=".48" stop-color="#008f55"/><stop offset="1" stop-color="#0867cb"/></linearGradient></defs>
+  <g fill="none" stroke="url(#g)" stroke-linecap="round" stroke-linejoin="round"><path d="M51 122a80 80 0 0 1 154 0" stroke-width="13"/><path d="M52 127a80 80 0 0 0 45 73v20H78m19-20v33m61-33v33m19-33v20h19" stroke-width="13"/><path d="M128 189V91" stroke-width="13"/><path d="M128 109c-37 25-41 60 0 80 41-20 37-55 0-80Z" fill="url(#g)" stroke="none"/><path d="M119 142c-30-13-51-3-55 25 28 13 48 2 55-25Z" fill="url(#g)" stroke="none"/><path d="M137 142c30-13 51-3 55 25-28 13-48 2-55-25Z" fill="url(#g)" stroke="none"/><circle cx="51" cy="127" r="11" stroke-width="10"/><circle cx="205" cy="127" r="11" stroke-width="10"/><circle cx="78" cy="220" r="8" stroke-width="9"/><circle cx="178" cy="220" r="8" stroke-width="9"/></g>
+</svg>
