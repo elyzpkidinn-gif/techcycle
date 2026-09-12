@@ -1,43 +1,8 @@
 (() => {
-  const esc = (value = '') => String(value).replace(/[&<>'"]/g, (char) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#39;', '"':'&quot;' }[char]));
-  const request = async (url, options = {}) => { const response = await fetch(url, { credentials: 'same-origin', headers: { 'Content-Type': 'application/json', ...(options.headers || {}) }, ...options }); const data = response.status === 204 ? null : await response.json().catch(() => ({})); if (!response.ok) throw new Error(data.error || 'Não foi possível concluir a solicitação.'); return data; };
-  let page = 1, pages = 1, knownTotal = 0, searchTimer;
-  const list = document.querySelector('#ideas-list'), message = document.querySelector('#feed-message'), more = document.querySelector('#load-more');
-  const initials = (name) => esc(name).slice(0, 2).toUpperCase();
-  const avatar = (image, name) => `<span class="avatar">${image ? `<img src="${image}" alt="Foto de ${esc(name)}">` : initials(name)}</span>`;
-  const card = (idea) => `<article class="post idea-card"><div class="post-meta">${avatar(idea.author_profile_image, idea.author_name)}<div><strong>${esc(idea.author_name)}</strong><small>${new Date(idea.created_at).toLocaleDateString('pt-BR')} · ${esc(idea.category_name || 'Sem categoria')}</small></div></div><h2><a href="/ideia/${idea.id}">${esc(idea.title)}</a></h2>${idea.image_data ? `<img class="idea-image" src="${idea.image_data}" alt="Imagem da ideia: ${esc(idea.title)}">` : ''}<p class="idea-description">${esc(idea.content)}</p><div class="tags">${(idea.tags || []).map((tag) => `<span class="tag">#${esc(tag)}</span>`).join('')}</div><div class="idea-stats"><span class="rating">★ ${Number(idea.average_rating).toFixed(1)} (${idea.rating_count})</span><span>◌ ${idea.comment_count} comentários</span></div><a class="button compact" href="/ideia/${idea.id}">Ver ideia</a></article>`;
-  function setLoadButton({ loading = false, finished = false } = {}) {
-    more.hidden = finished;
-    more.disabled = loading;
-    more.textContent = loading ? 'Carregando…' : 'Carregar mais';
-  }
-  async function load(reset = false) {
-    if (reset) { page = 1; knownTotal = 0; list.innerHTML = ''; }
-    message.textContent = reset ? 'Carregando ideias…' : '';
-    setLoadButton({ loading: true });
-    try {
-      const params = new URLSearchParams({ page, limit: 10, sort: document.querySelector('#idea-sort').value, category: document.querySelector('#idea-category').value, search: document.querySelector('#idea-search').value.trim() });
-      const data = await request(`/api/ideas?${params}`); pages = data.pages;
-      if (!reset && data.ideas.length === 0 && data.total > knownTotal) {
-        message.textContent = 'Novas publicações foram encontradas. O feed foi atualizado.';
-        return load(true);
-      }
-      knownTotal = data.total;
-      message.textContent = data.ideas.length || page > 1 ? '' : 'Ainda não existem ideias publicadas. Seja o primeiro a compartilhar uma!';
-      list.insertAdjacentHTML('beforeend', data.ideas.map(card).join(''));
-      const finished = page >= pages || data.ideas.length === 0;
-      setLoadButton({ finished });
-      if (finished && data.total > 0) message.textContent = 'Não há mais publicações para os filtros selecionados.';
-    } catch (error) {
-      message.textContent = 'Não foi possível carregar mais publicações. Verifique sua conexão e tente novamente.';
-      setLoadButton();
-    }
-  }
-  document.addEventListener('DOMContentLoaded', async () => {
-    try { const { user } = await TechCycleAuth.session(); document.querySelectorAll('[data-user-name]').forEach((el) => el.textContent = user.username); const logout = document.querySelector('[data-logout]'); logout.hidden = false; logout.addEventListener('click', async () => { await TechCycleAuth.logout(); location.assign('/login'); }); } catch (_) {}
-    try { const { categories } = await request('/api/categories'); document.querySelector('#idea-category').insertAdjacentHTML('beforeend', categories.map((c) => `<option value="${esc(c.slug)}">${esc(c.name)}</option>`).join('')); } catch (_) {}
-    document.querySelector('#idea-search').addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(() => load(true), 300); });
-    document.querySelector('#idea-category').addEventListener('change', () => load(true)); document.querySelector('#idea-sort').addEventListener('change', () => load(true));
-    more.addEventListener('click', () => { if (page >= pages) { message.textContent = 'Não há mais publicações para os filtros selecionados.'; setLoadButton({ finished: true }); return; } page += 1; load(); }); load(true);
-  });
+  const esc=(v='')=>String(v).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); const request=async(url,options={})=>{const r=await fetch(url,{credentials:'same-origin',headers:{'Content-Type':'application/json',...(options.headers||{})},...options});const d=r.status===204?null:await r.json().catch(()=>({}));if(!r.ok)throw Error(d.error||'Não foi possível concluir.');return d;}; let page=1,pages=1,isAdmin=false;
+  const card=idea=>`<article class="post idea-card"><h2><a href="/ideia/${idea.id}">${esc(idea.title)}</a></h2>${idea.image_data?`<img class="idea-image" src="${idea.image_data}" alt="Imagem da ideia">`:''}${idea.video_data?`<video class="idea-video" src="${idea.video_data}" controls preload="metadata"></video>`:''}<p class="idea-description">${esc(idea.content)}</p><div class="tags">${(idea.tags||[]).map(t=>`<span class="tag">#${esc(t)}</span>`).join('')}</div><div class="idea-stats"><span>★ ${Number(idea.average_rating).toFixed(1)} (${idea.rating_count})</span><span>◌ ${idea.comment_count} comentários</span></div><a class="button compact" href="/ideia/${idea.id}">Ver ideia</a>${isAdmin?`<button class="button danger-button" data-delete-idea="${idea.id}" type="button">Remover publicação</button>`:''}</article>`;
+  async function load(reset=true){const list=document.querySelector('#ideas-list'),message=document.querySelector('#feed-message'),more=document.querySelector('#load-more');if(reset){page=1;list.innerHTML='';}message.textContent='Carregando ideias...';const params=new URLSearchParams({page,limit:10,sort:document.querySelector('#idea-sort').value,category:document.querySelector('#idea-category').value,search:document.querySelector('#idea-search').value.trim()});try{const data=await request(`/api/ideas?${params}`);pages=data.pages;list.insertAdjacentHTML('beforeend',data.ideas.map(card).join(''));message.textContent=data.ideas.length?'':(page>1?'Não há conteúdo recente.':'Nenhuma ideia encontrada para estes filtros.');more.hidden=page>=pages||!data.ideas.length;if(page>1&&!data.ideas.length)window.scrollTo({top:0,behavior:'smooth'});}catch(error){message.textContent=error.message;more.hidden=true;}}
+  const askRemove=()=>new Promise(resolve=>{const modal=document.createElement('div');modal.className='modal-backdrop';modal.innerHTML='<section class="modal-card" role="dialog" aria-modal="true"><h2>Remover publicação?</h2><p>Esta publicação será ocultada da comunidade.</p><div class="modal-actions"><button class="button modal-cancel" type="button">Cancelar</button><button class="button modal-danger" type="button">Remover publicação</button></div></section>';document.body.append(modal);const close=value=>{modal.remove();resolve(value);};modal.querySelector('.modal-cancel').onclick=()=>close(false);modal.querySelector('.modal-danger').onclick=()=>close(true);});
+  document.addEventListener('DOMContentLoaded',async()=>{try{const{user}=await TechCycleAuth.session();isAdmin=user.role==='admin';document.querySelectorAll('[data-user-name]').forEach(e=>e.textContent=user.username);const logout=document.querySelector('[data-logout]');logout.hidden=false;logout.addEventListener('click',async()=>{await TechCycleAuth.logout();location.assign('/login');});const{categories}=await request('/api/categories');document.querySelector('#idea-category').insertAdjacentHTML('beforeend',categories.map(c=>`<option value="${esc(c.slug)}">${esc(c.name)}</option>`).join(''));}catch(_){}document.querySelector('#idea-search').addEventListener('input',()=>load(true));document.querySelector('#idea-category').addEventListener('change',()=>load(true));document.querySelector('#idea-sort').addEventListener('change',()=>load(true));document.querySelector('#load-more').addEventListener('click',()=>{if(page<pages){page++;load(false);}else{document.querySelector('#feed-message').textContent='Não há conteúdo recente.';window.scrollTo({top:0,behavior:'smooth'});}});document.querySelector('#ideas-list').addEventListener('click',async e=>{const button=e.target.closest('[data-delete-idea]');if(!button)return;if(!await askRemove())return;try{await request(`/api/admin/ideas/${button.dataset.deleteIdea}`,{method:'DELETE'});button.closest('.idea-card').remove();}catch(error){alert(error.message);}});load(true);});
 })();
+document.addEventListener('DOMContentLoaded',()=>{const list=document.querySelector('#ideas-list');if(!list)return;const decorate=()=>list.querySelectorAll('.idea-card').forEach(card=>{if(card.querySelector('.like-button'))return;const link=card.querySelector('a[href^="/ideia/"]');if(!link)return;const button=document.createElement('button');button.className='button compact like-button';button.textContent='♡ Curtir';button.dataset.like=link.href.split('/').pop();card.querySelector('.idea-stats')?.after(button);});new MutationObserver(decorate).observe(list,{childList:true});decorate();list.addEventListener('click',async e=>{const b=e.target.closest('.like-button');if(!b)return;const r=await fetch(`/api/ideas/${b.dataset.like}/like`,{method:'POST',credentials:'same-origin'}),d=await r.json();if(r.ok){b.textContent=`♥ ${d.likes} curtidas`;b.disabled=true;}else b.textContent=d.error||'Erro';});});

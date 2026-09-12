@@ -4,12 +4,43 @@ CREATE TABLE IF NOT EXISTS users (
   id BIGSERIAL PRIMARY KEY,
   username VARCHAR(30) NOT NULL,
   password_hash VARCHAR(255) NOT NULL,
+  role VARCHAR(16) NOT NULL DEFAULT 'member',
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   CONSTRAINT users_username_format CHECK (username ~ '^[[:upper:]][[:alpha:]]*$')
 );
+ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(16) NOT NULL DEFAULT 'member';
+ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
+ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('member', 'admin'));
 CREATE UNIQUE INDEX IF NOT EXISTS users_username_lower_unique ON users (LOWER(username));
 ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_image TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS about_me TEXT NOT NULL DEFAULT '';
+
+CREATE TABLE IF NOT EXISTS admin_creation_tokens (
+  id BIGSERIAL PRIMARY KEY,
+  token_hash VARCHAR(64) NOT NULL UNIQUE,
+  created_by BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  used_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS admin_creation_tokens_available_idx ON admin_creation_tokens(token_hash) WHERE used_at IS NULL;
+
+CREATE TABLE IF NOT EXISTS reports (
+  id BIGSERIAL PRIMARY KEY,
+  author_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  is_anonymous BOOLEAN NOT NULL DEFAULT FALSE,
+  address TEXT NOT NULL,
+  cep VARCHAR(9) NOT NULL,
+  contact VARCHAR(160) NOT NULL,
+  description TEXT NOT NULL,
+  image_data TEXT,
+  status VARCHAR(16) NOT NULL DEFAULT 'received' CHECK (status IN ('received', 'in_review', 'resolved', 'closed')),
+  admin_message TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS reports_created_idx ON reports(created_at DESC);
+CREATE INDEX IF NOT EXISTS reports_status_idx ON reports(status);
 
 CREATE TABLE IF NOT EXISTS profile_photo_suggestions (
   id SMALLSERIAL PRIMARY KEY,
@@ -40,6 +71,17 @@ CREATE TABLE IF NOT EXISTS sessions (
 CREATE INDEX IF NOT EXISTS sessions_user_id_idx ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS sessions_expires_at_idx ON sessions(expires_at);
 
+CREATE TABLE IF NOT EXISTS notifications (
+  id BIGSERIAL PRIMARY KEY,
+  user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  type VARCHAR(32) NOT NULL,
+  message TEXT NOT NULL,
+  link TEXT,
+  is_read BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS notifications_user_created_idx ON notifications(user_id, created_at DESC);
+
 CREATE TABLE IF NOT EXISTS posts (
   id BIGSERIAL PRIMARY KEY,
   author_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -50,6 +92,13 @@ CREATE TABLE IF NOT EXISTS posts (
 );
 CREATE INDEX IF NOT EXISTS posts_author_created_idx ON posts(author_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS posts_created_at_idx ON posts(created_at DESC);
+CREATE TABLE IF NOT EXISTS post_likes (
+  id BIGSERIAL PRIMARY KEY,
+  post_id BIGINT NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+  user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(post_id, user_id)
+);
 
 CREATE TABLE IF NOT EXISTS comments (
   id BIGSERIAL PRIMARY KEY,
@@ -88,6 +137,7 @@ ALTER TABLE posts ADD COLUMN IF NOT EXISTS status VARCHAR(16) NOT NULL DEFAULT '
   CHECK (status IN ('published', 'pending', 'hidden', 'deleted'));
 ALTER TABLE posts ADD COLUMN IF NOT EXISTS views INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE posts ADD COLUMN IF NOT EXISTS image_data TEXT;
+ALTER TABLE posts ADD COLUMN IF NOT EXISTS video_data TEXT;
 CREATE INDEX IF NOT EXISTS posts_category_created_idx ON posts(category_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS posts_status_created_idx ON posts(status, created_at DESC);
 

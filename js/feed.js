@@ -1,4 +1,5 @@
 document.addEventListener('DOMContentLoaded', async () => {
+  const main = document.querySelector('.app-grid main'); const empty = main?.querySelector('.empty-card'); if (main && empty) { try { const response = await fetch('/api/ideas?limit=5&sort=recent'); const data = await response.json(); const dashboard = document.createElement('section'); dashboard.className='dashboard-news'; dashboard.innerHTML=`<h2>Novidades da comunidade</h2>${(data.ideas||[]).map(idea=>`<article><a href="/ideia/${idea.id}"><strong>${String(idea.title).replace(/[<>&]/g,'')}</strong></a><small>${new Date(idea.created_at).toLocaleDateString('pt-BR')} · ${String(idea.author_name).replace(/[<>&]/g,'')}</small><p>${String(idea.content).slice(0,140)}${idea.content.length>140?'…':''}</p></article>`).join('')||'<p class="muted-text">Ainda não há novidades publicadas.</p>'}`; empty.before(dashboard); } catch (_) {} }
   const brandAvatar = document.querySelector('.composer .avatar');
   if (brandAvatar) {
     brandAvatar.classList.add('brand-avatar');
@@ -11,6 +12,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   try {
     const { user } = await TechCycleAuth.session();
     document.querySelectorAll('[data-user-name]').forEach((element) => { element.textContent = user.username; });
+    const notificationsLink = document.createElement('a'); notificationsLink.className = 'nav-link'; notificationsLink.href = '/notificacoes'; notificationsLink.textContent = '🔔  Notificações'; document.querySelector('.sidebar')?.append(notificationsLink);
+    const reportsLink = document.createElement('a'); reportsLink.className = 'nav-link'; reportsLink.href = '/denuncias'; reportsLink.textContent = '⚠  Denúncias'; document.querySelector('.sidebar')?.append(reportsLink);
+    if (user.role === 'admin') {
+      const link = document.createElement('a'); link.className = 'nav-link'; link.href = '/administracao'; link.textContent = '◆  Administração';
+      document.querySelector('.sidebar')?.append(link);
+    }
     if (!document.querySelector('.app-footer')) {
       const footer = document.createElement('footer');
       footer.className = 'app-footer';

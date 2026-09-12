@@ -8,7 +8,7 @@ document.addEventListener('DOMContentLoaded', () => {
     event.preventDefault();
     try {
       const data = new FormData(form);
-      await TechCycleAuth.login(data.get('username'), data.get('password'));
+      await TechCycleAuth.login(data.get('username'), data.get('password'), data.get('role'));
       window.location.assign(next && next.startsWith('/') ? next : '/feed');
     } catch (error) {
       if (message) message.textContent = error.message;
