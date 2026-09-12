@@ -51,7 +51,13 @@ CREATE TABLE IF NOT EXISTS profile_photo_suggestions (
 INSERT INTO profile_photo_suggestions (title, image_url) VALUES
   ('Folhas e natureza', 'https://images.unsplash.com/photo-1497250681960-ef046c08a56e?auto=format&fit=crop&w=360&q=80'),
   ('Floresta sustentável', 'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&w=360&q=80'),
-  ('Reciclagem criativa', 'https://images.unsplash.com/photo-1532996122724-e3c354a0b15b?auto=format&fit=crop&w=360&q=80')
+  ('Reciclagem criativa', 'https://images.unsplash.com/photo-1532996122724-e3c354a0b15b?auto=format&fit=crop&w=360&q=80'),
+  ('Energia limpa', 'https://images.unsplash.com/photo-1466611653911-95081537e5b7?auto=format&fit=crop&w=360&q=80'),
+  ('Vida ao ar livre', 'https://images.unsplash.com/photo-1500534623283-312aade485b7?auto=format&fit=crop&w=360&q=80'),
+  ('Horta urbana', 'https://images.unsplash.com/photo-1492496913980-501348b61469?auto=format&fit=crop&w=360&q=80'),
+  ('Oceano preservado', 'https://images.unsplash.com/photo-1469474968028-56623f02e42e?auto=format&fit=crop&w=360&q=80'),
+  ('Montanhas verdes', 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=360&q=80'),
+  ('Mobilidade sustentavel', 'https://images.unsplash.com/photo-1558981806-ec527fa84c39?auto=format&fit=crop&w=360&q=80')
 ON CONFLICT (image_url) DO NOTHING;
 
 -- Mantém o filtro de nomes editável sem modificar código da aplicação.
