@@ -12,12 +12,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   try {
     const { user } = await TechCycleAuth.session();
     document.querySelectorAll('[data-user-name]').forEach((element) => { element.textContent = user.username; });
-    const notificationsLink = document.createElement('a'); notificationsLink.className = 'nav-link'; notificationsLink.href = '/notificacoes'; notificationsLink.textContent = '🔔  Notificações'; document.querySelector('.sidebar')?.append(notificationsLink);
-    const reportsLink = document.createElement('a'); reportsLink.className = 'nav-link'; reportsLink.href = '/denuncias'; reportsLink.textContent = '⚠  Denúncias'; document.querySelector('.sidebar')?.append(reportsLink);
-    if (user.role === 'admin') {
-      const link = document.createElement('a'); link.className = 'nav-link'; link.href = '/administracao'; link.textContent = '◆  Administração';
-      document.querySelector('.sidebar')?.append(link);
-    }
     if (!document.querySelector('.app-footer')) {
       const footer = document.createElement('footer');
       footer.className = 'app-footer';

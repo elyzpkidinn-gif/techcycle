@@ -22,7 +22,7 @@ app.disable('x-powered-by');
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(express.json({ limit: '180mb' }));
 app.use(cookieParser(sessionSecret));
-app.use(['/pages/feed.html', '/pages/perfil.html', '/pages/favoritos.html', '/pages/criar-post.html'], requirePageAuth);
+app.use(['/pages/feed.html', '/pages/perfil.html', '/pages/favoritos.html', '/pages/criar-post.html', '/pages/tutoriais.html'], requirePageAuth);
 app.use('/assets', express.static(path.join(__dirname, 'assets')));
 app.use('/css', express.static(path.join(__dirname, 'css')));
 app.use('/js', express.static(path.join(__dirname, 'js')));
@@ -42,7 +42,7 @@ const normalizeUsername = (value) => typeof value === 'string' ? value.trim() : 
 const validUsername = (username) => /^\p{Lu}[\p{L}]*$/u.test(username) && username.length <= 30;
 const normalizedUsername = (username) => username.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
 const publicUser = (user) => ({ id: user.id, username: user.username, role: user.role || 'member', aboutMe: user.about_me || '', profileImage: user.profile_image || null, createdAt: user.created_at });
-const notify = (userId, type, message, link) => db.query('INSERT INTO notifications (user_id,type,message,link) VALUES ($1,$2,$3,$4)', [userId, type, message, link || null]);
+const notify = async (userId, type, message, link) => { const preference = await db.query('SELECT notifications_enabled FROM users WHERE id=$1', [userId]); if (preference.rows[0]?.notifications_enabled === false) return; return db.query('INSERT INTO notifications (user_id,type,message,link) VALUES ($1,$2,$3,$4)', [userId, type, message, link || null]); };
 
 async function usernameIsBlocked(username) {
   const result = await db.query('SELECT 1 FROM blocked_usernames WHERE normalized_username = $1', [normalizedUsername(username)]);
@@ -171,7 +171,7 @@ const cleanTags = (value) => {
   const raw = Array.isArray(value) ? value : typeof value === 'string' ? value.split(',') : [];
   return [...new Set(raw.map((tag) => String(tag).trim().replace(/^#/, '').replace(/[^\p{L}\p{N}_-]/gu, '')).filter(Boolean).slice(0, 8))];
 };
-const ideaFields = `p.id, p.title, p.content, p.tags, p.image_data, p.video_data, p.status, p.created_at, p.updated_at, p.views,
+const ideaFields = `p.id, p.title, p.content, p.tags, p.image_data, p.video_data, p.cover_data, p.content_type, p.status, p.created_at, p.updated_at, p.views,
   u.id AS author_id, u.username AS author_name, u.profile_image AS author_profile_image, c.id AS category_id, c.name AS category_name, c.slug AS category_slug,
   COALESCE(r.rating_count, 0)::int AS rating_count, COALESCE(r.average_rating, 0)::float AS average_rating,
   COALESCE(cm.comment_count, 0)::int AS comment_count`;
@@ -179,9 +179,9 @@ const ideaJoins = `FROM posts p JOIN users u ON u.id = p.author_id
   LEFT JOIN idea_categories c ON c.id = p.category_id
   LEFT JOIN (SELECT post_id, COUNT(*) AS rating_count, ROUND(AVG(rating), 1) AS average_rating FROM post_ratings GROUP BY post_id) r ON r.post_id = p.id
   LEFT JOIN (SELECT post_id, COUNT(*) AS comment_count FROM comments WHERE status = 'published' GROUP BY post_id) cm ON cm.post_id = p.id`;
-const cleanImage = (value) => {
+const cleanImage = (value, maxLength = 2_800_000) => {
   if (value == null || value === '') return null;
-  if (typeof value !== 'string' || !/^data:image\/(jpeg|png|webp|gif);base64,[A-Za-z0-9+/=]+$/i.test(value) || value.length > 2_800_000) return undefined;
+  if (typeof value !== 'string' || !/^data:image\/(jpeg|png|webp|gif);base64,[A-Za-z0-9+/=]+$/i.test(value) || value.length > maxLength) return undefined;
   return value;
 };
 const cleanVideo = (value) => {
@@ -231,6 +231,18 @@ app.get('/api/categories', async (req, res, next) => {
 app.put('/api/me/about', requireApiAuth, async (req, res, next) => {
   try { const aboutMe = cleanText(req.body.aboutMe, 500, false); if (aboutMe === null) return res.status(400).json({ error: 'O texto deve ter até 500 caracteres.' }); const result = await db.query('UPDATE users SET about_me=$1, updated_at=NOW() WHERE id=$2 RETURNING id, username, role, about_me, profile_image, created_at', [aboutMe, req.user.id]); return res.json({ user: publicUser(result.rows[0]) }); } catch (error) { next(error); }
 });
+app.get('/api/me/settings', requireApiAuth, async (req, res, next) => {
+  try { const result = await db.query('SELECT notifications_enabled, profile_public, allow_comments, default_sort, favorite_categories FROM users WHERE id=$1', [req.user.id]); res.json({ settings: result.rows[0] }); } catch (error) { next(error); }
+});
+app.put('/api/me/settings', requireApiAuth, async (req, res, next) => {
+  try { const sort = ['recent', 'rated', 'commented'].includes(req.body.defaultSort) ? req.body.defaultSort : 'recent'; const categories = Array.isArray(req.body.favoriteCategoryIds) ? req.body.favoriteCategoryIds.map(Number).filter(Number.isSafeInteger).slice(0, 20) : null; const result = await db.query('UPDATE users SET notifications_enabled=$1, profile_public=$2, allow_comments=$3, default_sort=$4, favorite_categories=COALESCE($5, favorite_categories), updated_at=NOW() WHERE id=$6 RETURNING notifications_enabled, profile_public, allow_comments, default_sort, favorite_categories', [Boolean(req.body.notificationsEnabled), Boolean(req.body.profilePublic), Boolean(req.body.allowComments), sort, categories, req.user.id]); res.json({ settings: result.rows[0] }); } catch (error) { next(error); }
+});
+app.put('/api/me/password', requireApiAuth, async (req, res, next) => {
+  try { const current = String(req.body.currentPassword || ''); const nextPassword = String(req.body.newPassword || ''); const user = await db.query('SELECT password_hash FROM users WHERE id=$1', [req.user.id]); if (!user.rowCount || !(await bcrypt.compare(current, user.rows[0].password_hash))) return res.status(400).json({ error: 'Senha atual inválida.' }); const validation = validatePassword(nextPassword); if (validation) return res.status(400).json({ error: validation }); await db.query('UPDATE users SET password_hash=$1, updated_at=NOW() WHERE id=$2', [await bcrypt.hash(nextPassword, 12), req.user.id]); res.status(204).end(); } catch (error) { next(error); }
+});
+app.delete('/api/me/sessions', requireApiAuth, async (req, res, next) => { try { await db.query('DELETE FROM sessions WHERE user_id=$1', [req.user.id]); clearSessionCookie(res); res.status(204).end(); } catch (error) { next(error); } });
+app.get('/api/me/export', requireApiAuth, async (req, res, next) => { try { const user = await db.query('SELECT id,username,role,about_me,created_at FROM users WHERE id=$1', [req.user.id]); const posts = await db.query('SELECT id,title,content,created_at,status FROM posts WHERE author_id=$1 ORDER BY created_at DESC', [req.user.id]); res.json({ user: user.rows[0], posts: posts.rows }); } catch (error) { next(error); } });
+app.delete('/api/me', requireApiAuth, async (req, res, next) => { try { await db.query('DELETE FROM users WHERE id=$1', [req.user.id]); clearSessionCookie(res); res.status(204).end(); } catch (error) { next(error); } });
 app.get('/api/ideas', async (req, res, next) => {
   try {
     const limit = Math.min(Math.max(Number(req.query.limit) || 12, 1), 50);
@@ -240,7 +252,13 @@ app.get('/api/ideas', async (req, res, next) => {
     const orders = { recent: 'p.created_at DESC', rated: 'average_rating DESC, rating_count DESC, p.created_at DESC', commented: 'comment_count DESC, p.created_at DESC' };
     const order = orders[req.query.sort] || orders.recent;
     const values = [];
-    const where = ["p.status = 'published'"];
+    const contentType = req.query.type === 'tutorial' ? 'tutorial' : 'idea';
+    const where = [
+      "p.status = 'published'",
+      contentType === 'tutorial'
+        ? "p.content_type = 'tutorial' AND p.video_data IS NOT NULL"
+        : "p.content_type = 'idea' AND p.video_data IS NULL"
+    ];
     if (search) { values.push(`%${search}%`); where.push(`(p.title ILIKE $${values.length} OR p.content ILIKE $${values.length} OR c.name ILIKE $${values.length} OR array_to_string(p.tags, ' ') ILIKE $${values.length})`); }
     if (category) { values.push(category); where.push(`c.slug = $${values.length}`); }
     const count = await db.query(`SELECT COUNT(*) ${ideaJoins} WHERE ${where.join(' AND ')}`, values);
@@ -261,14 +279,15 @@ app.get('/api/ideas/:id', async (req, res, next) => {
 app.post('/api/ideas', requireApiAuth, async (req, res, next) => {
   try {
     const title = cleanText(req.body.title, 160); const content = cleanText(req.body.content, 5000);
-    const categoryId = Number(req.body.categoryId); const tags = cleanTags(req.body.tags); const imageData = cleanImage(req.body.imageData); const videoData = cleanVideo(req.body.videoData);
+    const categoryId = Number(req.body.categoryId); const tags = cleanTags(req.body.tags); const imageData = cleanImage(req.body.imageData, 70_000_000); const videoData = cleanVideo(req.body.videoData); const coverData = cleanImage(req.body.coverData, 70_000_000); const contentType = req.body.contentType === 'tutorial' || (videoData && coverData) ? 'tutorial' : 'idea';
     if (!title || !content || !Number.isSafeInteger(categoryId)) return res.status(400).json({ error: 'Informe título, descrição e categoria válidos.' });
-    if (imageData === undefined) return res.status(400).json({ error: 'Envie uma imagem PNG, JPG, WEBP ou GIF de até 2 MB.' });
+    if (imageData === undefined) return res.status(400).json({ error: 'Envie uma imagem PNG, JPG, WEBP ou GIF de até 50 MB.' });
     if (videoData === undefined) return res.status(400).json({ error: 'Vídeo inválido ou maior que 20 MB.' });
+    if (coverData === undefined) return res.status(400).json({ error: 'A capa é inválida ou maior que 50 MB.' });
     if (imageData && videoData) return res.status(400).json({ error: 'Envie uma imagem ou um vídeo, não os dois.' });
     const category = await db.query('SELECT id FROM idea_categories WHERE id = $1', [categoryId]);
     if (!category.rowCount) return res.status(400).json({ error: 'Categoria inválida.' });
-    const result = await db.query('INSERT INTO posts (author_id, title, content, category_id, tags, image_data, video_data) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id', [req.user.id, title, content, categoryId, tags, imageData, videoData]);
+    const result = await db.query('INSERT INTO posts (author_id, title, content, category_id, tags, image_data, video_data, cover_data, content_type) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id', [req.user.id, title, content, categoryId, tags, imageData, videoData, coverData, contentType]);
     res.status(201).json({ id: result.rows[0].id });
   } catch (error) { next(error); }
 });
@@ -298,6 +317,24 @@ app.post('/api/ideas/:id/rating', requireApiAuth, async (req, res, next) => {
 app.post('/api/ideas/:id/like', requireApiAuth, async (req, res, next) => {
   try { const postId=Number(req.params.id); const post=await db.query("SELECT author_id FROM posts WHERE id=$1 AND status='published'",[postId]); if(!post.rowCount)return res.status(404).json({error:'Publicação não encontrada.'}); const liked=await db.query('INSERT INTO post_likes (post_id,user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING RETURNING id',[postId,req.user.id]); if(liked.rowCount){const count=await db.query('SELECT COUNT(*)::int AS total FROM post_likes WHERE post_id=$1',[postId]);const total=count.rows[0].total;if(total>0&&total%100===0&&Number(post.rows[0].author_id)!==Number(req.user.id))await notify(post.rows[0].author_id,'milestone',`Sua publicação alcançou ${total} curtidas!`,`/ideia/${postId}`);} return res.json({liked:Boolean(liked.rowCount),likes:Number((await db.query('SELECT COUNT(*)::int AS total FROM post_likes WHERE post_id=$1',[postId])).rows[0].total)}); } catch(error){next(error);}
 });
+app.post('/api/ideas/:id/favorite', requireApiAuth, async (req, res, next) => {
+  try {
+    const postId = Number(req.params.id);
+    if (!Number.isSafeInteger(postId)) return res.status(400).json({ error: 'Publicação inválida.' });
+    const post = await db.query("SELECT id FROM posts WHERE id=$1 AND status='published'", [postId]);
+    if (!post.rowCount) return res.status(404).json({ error: 'Publicação não encontrada.' });
+    await db.query('INSERT INTO post_favorites (post_id,user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [postId, req.user.id]);
+    res.status(201).json({ saved: true });
+  } catch (error) { next(error); }
+});
+app.get('/api/favorites', requireApiAuth, async (req, res, next) => {
+  try {
+    const result = await db.query(`SELECT ${ideaFields} ${ideaJoins}
+      JOIN post_favorites pf ON pf.post_id = p.id AND pf.user_id = $1
+      WHERE p.status = 'published' ORDER BY pf.created_at DESC`, [req.user.id]);
+    res.json({ ideas: result.rows });
+  } catch (error) { next(error); }
+});
 app.get('/api/notifications', requireApiAuth, async (req,res,next)=>{try{const result=await db.query('SELECT id,type,message,link,is_read,created_at FROM notifications WHERE user_id=$1 ORDER BY created_at DESC LIMIT 100',[req.user.id]);res.json({notifications:result.rows,unread:result.rows.filter(n=>!n.is_read).length});}catch(error){next(error);}});
 app.put('/api/notifications/read', requireApiAuth, async (req,res,next)=>{try{await db.query('UPDATE notifications SET is_read=TRUE WHERE user_id=$1',[req.user.id]);res.status(204).end();}catch(error){next(error);}});
 app.get('/api/ideas/:id/comments', async (req, res, next) => {
@@ -307,7 +344,7 @@ app.post('/api/ideas/:id/comments', requireApiAuth, async (req, res, next) => {
   try {
     const postId = Number(req.params.id); const content = cleanText(req.body.content, 1500); const parentId = req.body.parentId == null ? null : Number(req.body.parentId);
     if (!Number.isSafeInteger(postId) || !content || (parentId !== null && !Number.isSafeInteger(parentId))) return res.status(400).json({ error: 'Comentário inválido.' });
-    const post = await db.query("SELECT id FROM posts WHERE id=$1 AND status='published'", [postId]); if (!post.rowCount) return res.status(404).json({ error: 'Ideia não encontrada.' });
+    const post = await db.query("SELECT p.id, u.allow_comments FROM posts p JOIN users u ON u.id=p.author_id WHERE p.id=$1 AND p.status='published'", [postId]); if (!post.rowCount) return res.status(404).json({ error: 'Ideia não encontrada.' }); if (!post.rows[0].allow_comments) return res.status(403).json({ error: 'Os comentários estão desativados nesta publicação.' });
     if (parentId !== null) { const parent = await db.query('SELECT id FROM comments WHERE id=$1 AND post_id=$2 AND status=\'published\'', [parentId, postId]); if (!parent.rowCount) return res.status(400).json({ error: 'Resposta inválida.' }); }
     const result = await db.query('INSERT INTO comments (post_id, author_id, content, parent_id) VALUES ($1,$2,$3,$4) RETURNING id', [postId, req.user.id, content, parentId]); const author=await db.query('SELECT author_id FROM posts WHERE id=$1',[postId]); if(author.rowCount&&Number(author.rows[0].author_id)!==Number(req.user.id)) await notify(author.rows[0].author_id,'comment','Sua publicação recebeu um novo comentário.',`/ideia/${postId}`); res.status(201).json({ id: result.rows[0].id });
   } catch (error) { next(error); }
@@ -340,7 +377,7 @@ app.put('/api/me/profile-photo', requireApiAuth, async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-app.get(['/feed', '/perfil', '/favoritos', '/criar-post', '/denuncias', '/notificacoes', '/pages/feed.html', '/pages/perfil.html', '/pages/favoritos.html', '/pages/criar-post.html', '/pages/denuncias.html', '/pages/notificacoes.html'], requirePageAuth, (req, res) => res.sendFile(path.join(__dirname, 'pages', `${path.basename(req.path, '.html')}.html`)));
+app.get(['/feed', '/perfil', '/favoritos', '/criar-post', '/tutoriais', '/configuracoes', '/denuncias', '/notificacoes', '/pages/feed.html', '/pages/perfil.html', '/pages/favoritos.html', '/pages/criar-post.html', '/pages/tutoriais.html', '/pages/configuracoes.html', '/pages/denuncias.html', '/pages/notificacoes.html'], requirePageAuth, (req, res) => res.sendFile(path.join(__dirname, 'pages', `${path.basename(req.path, '.html')}.html`)));
 app.get(['/comunidade', '/pages/comunidade.html'], (req, res) => res.sendFile(path.join(__dirname, 'pages', 'comunidade.html')));
 app.get(['/ideia/:id', '/pages/ideia.html'], (req, res) => res.sendFile(path.join(__dirname, 'pages', 'ideia.html')));
 app.get(['/login', '/pages/login.html'], (req, res) => res.sendFile(path.join(__dirname, 'pages', 'login.html')));
