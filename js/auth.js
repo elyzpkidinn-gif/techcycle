@@ -17,6 +17,7 @@ function renderTechCycleNav() {
   const links = [...techCycleBaseNav];
   links.push(['/configuracoes', '⚙', 'Configurações']);
   links.push(['/administracao', '\u25c6', 'Administração']);
+  links.pop();
   techCycleSidebar.replaceChildren(...links.map(([href, icon, label]) => {
   const link = document.createElement('a');
   link.className = `nav-link${techCycleNavPath === href ? ' active' : ''}`;
@@ -30,7 +31,7 @@ renderTechCycleNav();
 if (location.pathname === '/favoritos') import('/js/favoritos.js');
 
 function ensureSectionSidebar() {
-  if (!['/notificacoes', '/denuncias'].includes(location.pathname) || document.querySelector('.app-grid')) return;
+  if (!['/notificacoes', '/denuncias', '/administracao'].includes(location.pathname) || document.querySelector('.app-grid')) return;
   const main = document.querySelector('main');
   if (!main) return;
   const grid = document.createElement('div');
@@ -223,6 +224,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       const link = document.createElement('a'); link.className = 'nav-link'; link.href = '/administracao'; link.textContent = '◆  Administração'; sidebar.append(link);
     }
     const isAdmin = user.role === 'admin';
+    navigation.splice(5, 0, ['/tutoriais', '▶  Tutoriais']);
+    navigation.push(['/configuracoes', '⚙  Configurações']);
     const navigation = [['/feed','⌂  Início'],['/comunidade','◌  Comunidade'],['/perfil','◉  Meu perfil'],['/favoritos','♡  Favoritos'],['/criar-post','＋  Compartilhar ideia'],['/notificacoes','🔔  Notificações'],['/denuncias','⚠  Denúncias']];
     if (isAdmin) navigation.push(['/administracao','◆  Administração']);
     sidebar.querySelectorAll('a.nav-link').forEach((link) => link.remove());
