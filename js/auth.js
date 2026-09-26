@@ -1,4 +1,25 @@
 // Mantém a navegação idêntica em todas as páginas, independentemente da aba aberta.
+function applyTechCycleTheme(theme) {
+  const selectedTheme = theme === 'dark' ? 'dark' : 'light';
+  document.documentElement.dataset.theme = selectedTheme;
+  document.documentElement.style.colorScheme = selectedTheme;
+  if (!['/login', '/cadastro'].includes(location.pathname)) {
+    localStorage.setItem('techcycle-theme', selectedTheme);
+  }
+  document.querySelectorAll('[data-theme-toggle]').forEach((button) => {
+    const dark = selectedTheme === 'dark';
+    button.setAttribute('aria-pressed', String(dark));
+    button.textContent = dark ? '☀ Tema claro' : '☾ Tema escuro';
+  });
+  document.querySelectorAll('[data-theme-select]').forEach((select) => { select.value = selectedTheme; });
+  return selectedTheme;
+}
+function toggleTechCycleTheme() { return applyTechCycleTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'); }
+window.applyTechCycleTheme = applyTechCycleTheme;
+window.toggleTechCycleTheme = toggleTechCycleTheme;
+const techCycleIsAuthPage = ['/login', '/cadastro'].includes(location.pathname);
+applyTechCycleTheme(techCycleIsAuthPage ? 'light' : (localStorage.getItem('techcycle-theme') || 'light'));
+
 const techCycleNavPath = location.pathname.startsWith('/ideia/') ? '/comunidade' : location.pathname;
 const techCycleBaseNav = [
   ['/feed', '\u2302', 'Início'],
@@ -29,6 +50,71 @@ function renderTechCycleNav() {
 
 renderTechCycleNav();
 if (location.pathname === '/favoritos') import('/js/favoritos.js');
+
+function enhanceThemeControls() {
+  const actions = document.querySelector('.topbar-actions');
+  if (actions && !actions.querySelector('[data-theme-toggle]')) {
+    const button = document.createElement('button');
+    button.type = 'button'; button.className = 'theme-toggle'; button.dataset.themeToggle = '';
+    button.addEventListener('click', toggleTechCycleTheme); actions.prepend(button);
+  }
+  document.querySelectorAll('[data-theme-select]').forEach((select) => select.addEventListener('change', () => applyTechCycleTheme(select.value)));
+  applyTechCycleTheme(document.documentElement.dataset.theme || 'light');
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', enhanceThemeControls, { once: true });
+else enhanceThemeControls();
+
+function enhanceVisualDesign() {
+  if (location.pathname === '/cadastro') {
+    const intro = document.querySelector('.auth-intro');
+    if (intro) {
+      intro.innerHTML = '<a class="brand" href="/login"><img class="brand-logo" src="/assets/images/techcycle-symbol.png" alt="">TechCycle</a><div class="login-intro-copy"><h1>Ideias que movem a tecnologia.</h1><p>Uma comunidade para descobrir, compartilhar e dar um novo ciclo ao que importa.</p><div class="intro-pills"><span>Inovação</span><span>Comunidade</span><span>Impacto</span></div></div>';
+    }
+  }
+  document.querySelectorAll('.sidebar').forEach((sidebar) => {
+    if (sidebar.querySelector('.sidebar-brand')) return;
+    const brand = document.createElement('a');
+    brand.className = 'sidebar-brand';
+    brand.href = '/feed';
+    brand.setAttribute('aria-label', 'Ir para o início do TechCycle');
+    brand.innerHTML = '<img src="/assets/images/techcycle-symbol.png" alt="">';
+    sidebar.prepend(brand);
+  });
+  document.querySelectorAll('.topbar').forEach((topbar) => {
+    const actions = topbar.querySelector('.topbar-actions');
+    if (!actions || topbar.querySelector('.site-search')) return;
+    const form = document.createElement('form');
+    form.className = 'site-search';
+    form.setAttribute('role', 'search');
+    form.innerHTML = '<input type="search" name="search" placeholder="Buscar ideias..." aria-label="Buscar ideias"><button type="submit" aria-label="Buscar">⌕</button>';
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      const query = form.elements.search.value.trim();
+      location.assign(`/comunidade${query ? `?search=${encodeURIComponent(query)}` : ''}`);
+    });
+    topbar.insertBefore(form, actions);
+  });
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', enhanceVisualDesign, { once: true });
+else enhanceVisualDesign();
+
+function repairTechCycleText() {
+  const replacements = {
+    'Ã¡': 'á', 'Ã£': 'ã', 'Ã§': 'ç', 'Ã©': 'é', 'Ãª': 'ê', 'Ã­': 'í',
+    'Ã³': 'ó', 'Ã´': 'ô', 'Ãº': 'ú', 'Ã§Ã£o': 'ção', 'Ã§Ãµes': 'ções',
+    'â†’': '→', 'â†': '←', 'â˜†': '☆', 'â˜…': '★', 'â—': '◌', 'âš™': '⚙', 'ï¼‹': '＋'
+  };
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  const nodes = [];
+  while (walker.nextNode()) nodes.push(walker.currentNode);
+  nodes.forEach((node) => {
+    let value = node.nodeValue;
+    Object.entries(replacements).forEach(([from, to]) => { value = value.split(from).join(to); });
+    node.nodeValue = value;
+  });
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', repairTechCycleText, { once: true });
+else repairTechCycleText();
 
 function ensureSectionSidebar() {
   if (!['/notificacoes', '/denuncias', '/administracao'].includes(location.pathname) || document.querySelector('.app-grid')) return;

@@ -15,7 +15,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (existingFavorite && existingActions) {
       const lateLike = card.querySelector('.like-button');
       if (lateLike && lateLike.parentElement !== existingActions) existingActions.prepend(lateLike);
-      existingActions.style.flexWrap = 'nowrap';
+      const remove = card.querySelector('[data-delete-idea]');
+      if (remove && remove.parentElement !== existingActions) existingActions.append(remove);
+      existingActions.style.flexWrap = 'wrap';
       existingActions.querySelectorAll('.button').forEach((item) => { item.style.padding = '9px 12px'; item.style.fontSize = '14px'; });
       return;
     }
@@ -36,8 +38,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if (like) actions.append(like);
     actions.append(button);
     if (view) actions.append(view);
+    const remove = card.querySelector('[data-delete-idea]');
+    if (remove) actions.append(remove);
     card.querySelector('.idea-stats')?.after(actions);
-    actions.querySelectorAll('.button').forEach((item) => { item.style.padding = '9px 12px'; item.style.fontSize = '14px'; });
+    actions.querySelectorAll('.button').forEach((item) => { item.style.padding = '9px 12px'; item.style.fontSize = '14px'; item.style.margin = '0'; });
   });
   new MutationObserver(decorate).observe(list, { childList: true, subtree: true });
   decorate();
